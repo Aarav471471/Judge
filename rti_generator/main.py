@@ -2,12 +2,20 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 import database, models, schemas, rag_engine
 import ai_engine # Import your new AI module
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import pdf_generator
-import os
-
-models.Base.metadata.create_all(bind=database.engine)
+# app = FastAPI(title="RTI Auto-Drafter API")
 app = FastAPI(title="RTI Auto-Drafter API")
+import os
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+models.Base.metadata.create_all(bind=database.engine)
 
 def get_db():
     db = database.SessionLocal()

@@ -1,16 +1,10 @@
-import chromadb
+# Temporary RAG Bypass for Hackathon Speed
 
-# Initialize local vector database
-chroma_client = chromadb.PersistentClient(path="./chroma_db")
-collection = chroma_client.get_or_create_collection(name="rti_laws")
-
-def retrieve_legal_context(query: str) -> str:
-    """Queries ChromaDB for relevant legal acts based on user complaint."""
-    results = collection.query(
-        query_texts=[query],
-        n_results=2 # Fetch top 2 most relevant document chunks
-    )
-    if not results["documents"]:
-        return "No relevant legal context found."
+def retrieve_legal_context(query_text: str) -> str:
+    """Mock retrieval function to bypass the 79MB download."""
     
-    return "\n".join(results["documents"][0])
+    # We will just return a generic legal context for now so the AI still works
+    return (
+        "Under the Right to Information Act, 2005, citizens have the right to request "
+        "information from any public authority. The authority must respond within 30 days."
+    )
