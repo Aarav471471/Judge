@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { FileText, Download, Loader2, AlertCircle, Send } from 'lucide-react';
+import FileUpload from './FileUpload';
 
 function App() {
   const [complaint, setComplaint] = useState('');
@@ -21,10 +23,9 @@ function App() {
       const data = await res.json();
       setResponse(data);
     } catch (error) {
-      console.error("Error generating RTI:", error);
-    } finally {
-      setLoading(false);
+      alert("Failed to connect to backend");
     }
+    setLoading(false);
   };
 
   const downloadPDF = async () => {
@@ -34,6 +35,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicant_id: "IIT2025002" })
       });
+      
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -43,35 +45,47 @@ function App() {
       a.click();
       a.remove();
     } catch (error) {
-      console.error("Error downloading PDF:", error);
+      alert("Failed to download PDF");
     }
   };
 
   return (
     <div className="flex h-screen bg-[#0D1117] text-white font-sans">
-      
-      {/* Left Panel: Conversational Input */}
-      <div className="w-1/3 p-8 border-r border-gray-800 flex flex-col justify-center">
-        <h1 className="text-3xl font-bold mb-2">RTI Auto-Drafter</h1>
-        <p className="text-gray-400 mb-8 text-sm">Describe your civic issue in plain language, and our AI will draft the legal request.</p>
+      <div className="w-1/3 p-8 border-r border-gray-800 flex flex-col justify-center items-start">
+        
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-blue-900/30 rounded-lg">
+            <FileText className="text-blue-500" size={28} />
+          </div>
+          <h1 className="text-3xl font-bold leading-tight text-left">RTI Auto-Drafter</h1>
+        </div>
+        
+        <p className="text-gray-400 mb-8 text-sm text-left">Describe your civic issue in plain language.</p>
         
         <textarea
-          className="w-full p-4 bg-[#323744] rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 min-h-[150px] mb-4"
-          placeholder="e.g., The streetlights outside my college have been broken for two months..."
+          className="w-full p-4 bg-[#323744] rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 min-h-[150px] mb-4 resize-none"
+          placeholder="The streetlights outside my college have been broken..."
           value={complaint}
           onChange={(e) => setComplaint(e.target.value)}
-        ></textarea>
+        />
         
         <button 
           onClick={generateRTI}
           disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-lg"
         >
+          {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
           {loading ? 'Drafting Legal Notice...' : 'Generate RTI Application'}
         </button>
+
+        <div className="w-full h-px bg-gray-800 my-8"></div>
+
+        <div className="w-full">
+           <FileUpload />
+        </div>
+
       </div>
 
-      {/* Right Panel: Document Preview */}
       <div className="w-2/3 p-8 bg-[#161B22] overflow-y-auto">
         {response ? (
           <div className="bg-[#323744] p-8 rounded-lg shadow-xl border border-gray-700 max-w-3xl mx-auto">
@@ -84,7 +98,10 @@ function App() {
 
             {response.missing_info && response.missing_info.length > 0 && (
               <div className="mb-6 bg-yellow-900/30 border border-yellow-700 p-4 rounded text-yellow-200">
-                <h3 className="font-bold mb-2">Action Required - Missing Details:</h3>
+                <h3 className="font-bold mb-2 flex items-center gap-2">
+                  <AlertCircle size={18} />
+                  Action Required - Missing Details:
+                </h3>
                 <ul className="list-disc pl-5">
                   {response.missing_info.map((info, idx) => (
                     <li key={idx}>{info}</li>
@@ -95,21 +112,22 @@ function App() {
 
             <div>
               <span className="text-gray-400 text-sm font-semibold uppercase">Document Preview:</span>
-              <pre className="whitespace-pre-wrap mt-2 text-gray-200 font-mono text-sm">
-                
+              <pre className="whitespace-pre-wrap mt-2 text-gray-200 font-mono text-sm mb-6 bg-[#0D1117] p-4 rounded border border-gray-700">
                 {response.rti_draft_preview}
               </pre>
               
               <button 
                 onClick={downloadPDF}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg"
+                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg"
               >
+                <Download size={20} />
                 Download Print-Ready PDF
               </button>
             </div>
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-600">
+          <div className="h-full flex flex-col items-center justify-center text-gray-600">
+            <FileText size={48} className="mb-4 opacity-20" />
             <p>Your drafted document will appear here.</p>
           </div>
         )}
