@@ -1,14 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   FileText, Send, Loader2, Paperclip, UploadCloud, 
   ChevronLeft, Copy, Download, RefreshCcw, LayoutTemplate, 
   MessageSquare, PlusCircle, AlertCircle, CheckCircle, Users, 
   Scale, BarChart3, ArrowRight, Zap, Shield, HelpCircle, ChevronDown, ChevronUp,
-  Gavel 
+  Gavel, Database 
 } from 'lucide-react';
 
 function App() {
-  const [currentView, setCurrentView] = useState('landing'); 
+  const [currentView, setCurrentView] = useState('landing'); // 'landing', 'app', or 'database'
   const [openFAQ, setOpenFAQ] = useState(null); 
   
   const [complaint, setComplaint] = useState('');
@@ -18,6 +18,11 @@ function App() {
   const [file, setFile] = useState(null);
   
   const [docData, setDocData] = useState({ department: '', subject: '', body: '' });
+  
+  // Database cases state for the new database page
+  const [casesList, setCasesList] = useState([]);
+  const [dbLoading, setDbLoading] = useState(false);
+
   const fileInputRef = useRef(null);
 
   const suggestions = [
@@ -55,18 +60,52 @@ function App() {
       if (!res.ok) throw new Error("Backend connection failed");
       const data = await res.json();
       
+      const newDepartment = data.department_identified || "Public Information Officer";
+      const newSubject = "Information Request under RTI Act, 2005";
+      const newBody = data.rti_draft_preview || "";
+
       setDocData({
-        department: data.department_identified || "Public Information Officer",
-        subject: "Information Request under RTI Act, 2005",
-        body: data.rti_draft_preview || ""
+        department: newDepartment,
+        subject: newSubject,
+        body: newBody
       });
       setAppState('result');
+
+      // Automatically push/save to your friend's database backend endpoint if available
+      fetch('http://127.0.0.1:8000/cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department: newDepartment, subject: newSubject, body: newBody })
+      }).catch(err => console.log("DB Auto-save notice:", err));
+
     } catch (error) {
       console.error(error);
       alert("Failed to connect to the AI engine. Is the FastAPI server running?");
       setAppState('empty');
     }
   };
+
+  // Fetch all complaints from your friend's database when entering the database view
+  const fetchAllCases = async () => {
+    setDbLoading(true);
+    try {
+      const res = await fetch('http://127.0.0.1:8000/cases'); // Adjust to match your friend's FastAPI route
+      if (!res.ok) throw new Error("Failed to fetch cases");
+      const data = await res.json();
+      setCasesList(data);
+    } catch (error) {
+      console.error("Error fetching database cases:", error);
+      setCasesList([]);
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentView === 'database') {
+      fetchAllCases();
+    }
+  }, [currentView]);
 
   const handleDownload = async () => {
     try {
@@ -98,7 +137,7 @@ function App() {
     setFile(null);
   };
 
-  // --- VIEW 1: LANDING PAGE ---
+  // --- VIEW 1: LANDING PAGE (Fully Restored) ---
   if (currentView === 'landing') {
     return (
       <div className="min-h-screen w-full bg-white text-slate-900 font-sans flex flex-col">
@@ -110,16 +149,23 @@ function App() {
               <span className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mt-0.5">Civic Action Engine</span>
             </div>
           </div>
-          <button 
-            onClick={() => setCurrentView('app')}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg transition-colors shadow-sm"
-          >
-            Launch App
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setCurrentView('database')}
+              className="text-slate-600 hover:text-blue-600 font-medium text-sm flex items-center gap-1.5 transition-colors"
+            >
+              <Database size={16} /> All Complaints (DB)
+            </button>
+            <button 
+              onClick={() => setCurrentView('app')}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg transition-colors shadow-sm text-sm"
+            >
+              Launch App
+            </button>
+          </div>
         </nav>
 
         <main className="flex-1 flex flex-col items-center justify-start px-6 max-w-5xl mx-auto py-16 pb-24 w-full">
-          
           <div className="text-center">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 font-medium text-sm mb-6 border border-blue-100">
               <Scale size={16} /> Democratizing Legal Action
@@ -313,6 +359,85 @@ function App() {
     );
   }
 
+  // --- VIEW 3: ALL COMPLAINTS DATABASE PAGE ---
+  if (currentView === 'database') {
+    return (
+      <div className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans flex flex-col">
+        <nav className="flex items-center justify-between px-8 py-5 bg-white border-b border-slate-200 shrink-0">
+          <div 
+            onClick={() => setCurrentView('landing')}
+            className="flex items-center gap-3 font-bold text-lg tracking-wide cursor-pointer text-slate-900"
+          >
+            <img src="/image.jpg.jpg" alt="Official Emblem" className="h-10 w-auto mix-blend-multiply" />
+            <span>RTI Auto-Drafter</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setCurrentView('app')}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg shadow-sm"
+            >
+              AI Assistant
+            </button>
+            <button 
+              onClick={() => { resetApp(); setCurrentView('app'); }}
+              className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md text-sm font-medium"
+            >
+              <PlusCircle size={16} /> New Case
+            </button>
+          </div>
+        </nav>
+
+        <main className="flex-1 max-w-4xl w-full mx-auto p-8">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">All Submitted Complaints</h2>
+              <p className="text-sm text-slate-500">Live records pulled from your teammate's database backend.</p>
+            </div>
+            <button 
+              onClick={fetchAllCases}
+              className="bg-white border border-slate-300 text-slate-700 text-sm font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              Refresh Data
+            </button>
+          </div>
+
+          {dbLoading ? (
+            <div className="flex items-center justify-center py-20 text-slate-500 gap-2">
+              <Loader2 className="animate-spin" size={20} /> Loading database records...
+            </div>
+          ) : casesList.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
+              <Database className="mx-auto text-slate-300 mb-3" size={40} />
+              <p className="text-slate-700 font-medium mb-1">No complaints found in the database.</p>
+              <p className="text-slate-400 text-xs mb-4">Try generating a new application in the AI Assistant to populate records.</p>
+              <button 
+                onClick={() => setCurrentView('app')}
+                className="bg-blue-600 text-white text-sm font-semibold py-2 px-5 rounded-lg shadow-sm"
+              >
+                Create First Case
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {casesList.map((item, index) => (
+                <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                      {item.department || "Public Information Officer"}
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">ID: #{item.id || index + 1}</span>
+                  </div>
+                  <h3 className="font-bold text-slate-900 mb-1">{item.subject || "Information Request under RTI Act, 2005"}</h3>
+                  <p className="text-slate-600 text-sm whitespace-pre-line line-clamp-3">{item.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
   // --- VIEW 2: APPLICATION INTERFACE ---
   return (
     <div className="h-screen w-full bg-slate-50 text-slate-900 font-sans flex flex-col overflow-hidden fixed inset-0">
@@ -321,20 +446,30 @@ function App() {
         <div className="flex items-center gap-6">
           <div 
             onClick={() => setCurrentView('landing')}
-            className="flex items-center gap-3 font-bold text-lg tracking-wide cursor-pointer hover:opacity-70 transition-opacity text-slate-900"
+            className="flex items-center gap-3 font-bold text-lg tracking-wide cursor-pointer hover:opacity-75 transition-opacity text-slate-900"
           >
             <img src="/image.jpg.jpg" alt="Official Emblem" className="h-10 w-auto mix-blend-multiply" />
             <span>RTI Auto-Drafter</span>
           </div>
           
           <div className="hidden md:flex items-center gap-5 text-sm font-medium text-slate-500 border-l border-slate-200 pl-6">
-            <button className="flex items-center gap-1.5 hover:text-slate-900 transition-colors">
-              <ChevronLeft size={16} /> Problem Categories
+            <button 
+              onClick={() => setCurrentView('database')}
+              className="flex items-center gap-1.5 hover:text-slate-900 transition-colors"
+            >
+              <Database size={16} /> All Complaints (DB)
             </button>
-            <button className="flex items-center gap-1.5 hover:text-slate-900 transition-colors">
+            <button 
+              onClick={() => setCurrentView('app')}
+              className="flex items-center gap-1.5 hover:text-slate-900 transition-colors"
+            >
               <MessageSquare size={16} /> AI Assistant
             </button>
-            <button className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md hover:bg-blue-100 transition-colors">
+            {/* Functional New Case Button */}
+            <button 
+              onClick={resetApp}
+              className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md hover:bg-blue-100 transition-colors"
+            >
               <PlusCircle size={16} /> New Case
             </button>
           </div>
@@ -558,7 +693,10 @@ function App() {
                 >
                   <Download size={18} /> Download as PDF
                 </button>
-                <button className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-3 px-6 rounded-lg transition-colors shadow-sm">
+                <button 
+                  onClick={() => navigator.clipboard.writeText(docData.body)}
+                  className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-3 px-6 rounded-lg transition-colors shadow-sm"
+                >
                   <Copy size={18} /> Copy Text
                 </button>
                 <button 
