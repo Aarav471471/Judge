@@ -403,6 +403,28 @@ function App() {
     generateRTI(combined);
   };
 
+
+  const [isAutomating, setIsAutomating] = useState(false);
+
+  const handleAutoFill = async () => {
+    setIsAutomating(true);
+    try {
+      await fetch('http://127.0.0.1:8000/auto_fill_portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicant_name: applicantName,
+          address: address,
+          complaint: docData.body,
+          department: docData.department || ''
+        })
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    setTimeout(() => setIsAutomating(false), 3000);
+  };
+
   const handleDownload = async () => {
     try {
       const res = await fetch('http://127.0.0.1:8000/download_pdf', {
@@ -1037,6 +1059,10 @@ function App() {
                       </button>
                       <button onClick={handleEmail} className="flex items-center gap-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 font-semibold text-sm py-2 px-4 rounded-lg shadow-sm transition-all">
                         <Mail size={16} /> Send via Email
+                      </button>
+                      <button onClick={handleAutoFill} disabled={isAutomating} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold text-sm py-2 px-4 rounded-lg shadow-sm transition-all shadow-emerald-600/20">
+                        {isAutomating ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+                        {isAutomating ? 'Initiating CivicAssist...' : 'Auto-Fill Official Portal'}
                       </button>
                       <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm py-2 px-5 rounded-lg shadow-sm transition-all shadow-blue-600/20">
                         <Download size={16} /> Download PDF

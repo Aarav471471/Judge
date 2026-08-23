@@ -42,6 +42,146 @@ def verify_otp(req: schemas.VerifyOTPRequest):
     del mock_otp_store[req.mobile_number]
     return {"status": "success", "token": "mock-jwt-token"}
 
+
+
+
+
+# CivicAssist Browser Automation Endpoint
+from pydantic import BaseModel
+class CivicAssistRequest(BaseModel):
+    applicant_name: str
+    address: str
+    complaint: str
+    department: str = ""
+
+def run_playwright_sync(req: CivicAssistRequest):
+    from playwright.sync_api import sync_playwright
+    import time
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(viewport={'width': 1280, 'height': 800})
+            page = context.new_page()
+            
+            page.goto("https://rtionline.gov.in")
+            time.sleep(2)
+            
+            try:
+                page.click('text="Submit Request"')
+                time.sleep(3)
+                page.evaluate("document.querySelector('input[type=\"checkbox\"]').checked = true")
+                page.evaluate("document.querySelector('input[value=\"Submit\"]').click()")
+            except Exception as e:
+                print("Click error:", e)
+                
+            time.sleep(3)
+            
+            overlay_html_checkpoint = f"""
+            <div id="civic-assist-overlay" style="position:fixed;top:20px;right:20px;background:#1e1b4b;color:white;padding:20px;border-radius:12px;z-index:999999;box-shadow:0 10px 25px rgba(0,0,0,0.5);font-family:sans-serif;max-width:350px;border:2px solid #3b36e8;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                    <div style="background:#3b36e8;padding:8px;border-radius:50%;">🤖</div>
+                    <strong style="font-size:18px;">CivicAssist AI</strong>
+                </div>
+                <p style="font-size:14px;line-height:1.5;margin-bottom:15px;">I have safely halted at this security checkpoint per protocol.</p>
+                <div style="background:#ff9800;color:black;padding:10px;border-radius:8px;font-size:13px;font-weight:bold;">
+                    ⚠️ Security Halt: Please complete the CAPTCHA/OTP on the screen and click Submit to continue.
+                </div>
+            </div>
+            """
+            
+            overlay_html_final = f"""
+            <div id="civic-assist-overlay-final" style="position:fixed;top:20px;right:20px;background:#1e1b4b;color:white;padding:20px;border-radius:12px;z-index:999999;box-shadow:0 10px 25px rgba(0,0,0,0.5);font-family:sans-serif;max-width:350px;border:2px solid #3b36e8;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                    <div style="background:#10b981;padding:8px;border-radius:50%;">✅</div>
+                    <strong style="font-size:18px;">CivicAssist AI</strong>
+                </div>
+                <p style="font-size:14px;line-height:1.5;margin-bottom:15px;">I have successfully mapped and injected your details into the official portal.</p>
+                <div style="background:rgba(255,255,255,0.1);padding:10px;border-radius:8px;font-size:12px;margin-bottom:15px;">
+                    <strong>Applicant:</strong> {req.applicant_name}<br/>
+                    <strong>Address:</strong> {req.address[:30]}...
+                </div>
+                <div style="background:#10b981;color:white;padding:10px;border-radius:8px;font-size:13px;font-weight:bold;">
+                    ✨ Ready for submission! Review the form and click Make Payment.
+                </div>
+            </div>
+            """
+            
+            escaped_complaint = req.complaint.replace('`', '').replace('$', '')
+            smart_filler_js = f"""
+                const inputs = document.querySelectorAll('input[type="text"]');
+                for (let inp of inputs) {{
+                    let n = (inp.name || '').toLowerCase();
+                    let i = (inp.id || '').toLowerCase();
+                    let p = (inp.placeholder || '').toLowerCase();
+                    
+                    // Fill Applicant Name
+                    if ((n.includes('name') || i.includes('name')) && !n.includes('search') && !i.includes('search')) {{
+                        inp.value = `{req.applicant_name}`;
+                    }}
+                    
+                    // Fill Department Search Box
+                    if (n.includes('search') || i.includes('search') || p.includes('public authority')) {{
+                        if (`{req.department}`) {{
+                            inp.value = `{req.department}`;
+                            // Trigger input event to populate the autocomplete dropdown
+                            inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }}
+                    }}
+                }}
+                
+                const textareas = document.querySelectorAll('textarea');
+                for (let ta of textareas) {{
+                    let n = (ta.name || '').toLowerCase();
+                    let i = (ta.id || '').toLowerCase();
+                    
+                    if (n.includes('add') || i.includes('add')) {{
+                        ta.value = `{req.address.replace('`', '')}`;
+                    }} else if (n.includes('rti') || i.includes('rti') || n.includes('desc') || i.includes('desc') || n.includes('text') || i.includes('text')) {{
+                        ta.value = `{escaped_complaint}`;
+                    }}
+                }}
+                
+                if (textareas.length === 1) {{
+                    textareas[0].value = `{escaped_complaint}`;
+                }} else if (textareas.length >= 2) {{
+                    if (!textareas[0].value) textareas[0].value = `{req.address.replace('`', '')}`;
+                    if (!textareas[textareas.length-1].value) textareas[textareas.length-1].value = `{escaped_complaint}`;
+                }}
+            """
+            
+            start_time = time.time()
+            injected_final = False
+            
+            while time.time() - start_time < 120:
+                try:
+                    current_url = page.url
+                    body_exists = page.evaluate("!!document.body")
+                    if body_exists:
+                        if "request_email_check.php" in current_url or "index.php" in current_url:
+                            has_overlay = page.evaluate("!!document.getElementById('civic-assist-overlay')")
+                            if not has_overlay:
+                                page.evaluate(f"document.body.insertAdjacentHTML('beforeend', `{overlay_html_checkpoint}`)")
+                        elif "request.php" in current_url and "emailchk=" in current_url:
+                            has_final_overlay = page.evaluate("!!document.getElementById('civic-assist-overlay-final')")
+                            if not has_final_overlay:
+                                page.evaluate(f"document.body.insertAdjacentHTML('beforeend', `{overlay_html_final}`)")
+                                page.evaluate(smart_filler_js)
+                except Exception as e:
+                    print('Loop Error:', e)
+                time.sleep(1)
+                
+            browser.close()
+        except Exception as e:
+            print("Playwright Error:", e)
+
+@app.post("/auto_fill_portal")
+async def auto_fill_portal(req: CivicAssistRequest):
+    import threading
+    t = threading.Thread(target=run_playwright_sync, args=(req,))
+    t.start()
+    return {"status": "success", "message": "Browser automation started!"}
+
 def get_db():
     db = database.SessionLocal()
     try:
