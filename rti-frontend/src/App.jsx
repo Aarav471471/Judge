@@ -7,9 +7,69 @@ import {
   Gavel, Smartphone, KeyRound, Sparkles, Mic, MicOff, Globe
 } from 'lucide-react';
 
+
+const LocationMapModal = ({ onClose, onLocationSelect }) => {
+  useEffect(() => {
+    if (!window.L) return;
+    const map = window.L.map('mapModal').setView([20.5937, 78.9629], 5); // India center
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let marker;
+
+    map.on('click', async (e) => {
+      const { lat, lng } = e.latlng;
+      if (marker) map.removeLayer(marker);
+      marker = window.L.marker([lat, lng]).addTo(map);
+      
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await res.json();
+        if (data && data.display_name) {
+          onLocationSelect(data.display_name);
+        }
+      } catch (err) {
+        console.error("Map click fetch error", err);
+      }
+    });
+
+    // Try to get user location to center the map quickly
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        map.setView([pos.coords.latitude, pos.coords.longitude], 13);
+      }, () => {});
+    }
+
+    return () => {
+      map.remove();
+    };
+  }, [onLocationSelect]);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+      <div className="bg-white rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col animate-subtle border border-zinc-200/50">
+        <div className="p-5 border-b border-zinc-100 flex justify-between items-center bg-zinc-50">
+          <div className="font-bold text-zinc-900 text-lg flex items-center gap-2"><Globe size={20} className="text-emerald-600"/> Pinpoint Incident Location</div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-900 transition-colors font-bold text-sm bg-zinc-200/50 hover:bg-zinc-200 px-3 py-1.5 rounded-lg">
+            Close Map
+          </button>
+        </div>
+        <div className="p-0 relative">
+          <div id="mapModal" style={{ height: '65vh', width: '100%', zIndex: 1 }}></div>
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border border-zinc-200/50 text-sm font-bold text-zinc-800 z-[1000] pointer-events-none flex items-center gap-2">
+            <MapPin size={16} className="text-red-500 animate-bounce" /> Tap anywhere on the map to set the exact address
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [currentView, setCurrentView] = useState('landing'); 
   const [openFAQ, setOpenFAQ] = useState(null); 
+  const [showMap, setShowMap] = useState(false); 
   
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -111,6 +171,35 @@ function App() {
   const [locationDetails, setLocationDetails] = useState('');
   const [isFetchingPin, setIsFetchingPin] = useState(false);
 
+  const handleChatSubmit = (e) => {
+    e.preventDefault();
+    if(!chatInput.trim()) return;
+    
+    const val = chatInput;
+    setChatMessages(prev => [...prev, { role: 'user', text: val }]);
+    setChatInput('');
+    
+    if (chatStep === 'name') {
+      setApplicantName(val);
+      setTimeout(() => {
+        setChatMessages(prev => [...prev, { role: 'bot', text: `Nice to meet you, ${val}. What is your full residential address? (You can type 'skip' to use the map later)` }]);
+        setChatStep('address');
+      }, 500);
+    } else if (chatStep === 'address') {
+      if (val.toLowerCase() !== 'skip') setAddress(val);
+      setTimeout(() => {
+        setChatMessages(prev => [...prev, { role: 'bot', text: `Got it! Lastly, describe the issue you are facing or the information you need in detail.` }]);
+        setChatStep('issue');
+      }, 500);
+    } else if (chatStep === 'issue') {
+      setComplaint(val);
+      setTimeout(() => {
+        setChatMessages(prev => [...prev, { role: 'bot', text: `Perfect! I've populated your form. Redirecting...` }]);
+        setTimeout(() => setAppState('empty'), 1200);
+      }, 500);
+    }
+  };
+
   const handlePinChange = async (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 6);
     setPincode(val);
@@ -136,6 +225,9 @@ function App() {
   };
 
   const [appState, setAppState] = useState('empty'); 
+  const [chatMessages, setChatMessages] = useState([{ role: 'bot', text: 'Hello! I am your AI assistant. To start, what is your full name?' }]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatStep, setChatStep] = useState('name'); 
   const [loadingMessage, setLoadingMessage] = useState('');
   const [showAttachment, setShowAttachment] = useState(false);
   const [file, setFile] = useState(null);
@@ -735,6 +827,48 @@ function App() {
           {/* TAB 1: RTI DRAFTER */}
           {activeTab === 'rti' && (
             <div className="animate-subtle">
+              
+              {appState === 'chat' && (
+                <div className="max-w-2xl mx-auto bg-white rounded-3xl shadow-sm border border-zinc-200 overflow-hidden flex flex-col h-[600px]">
+                  <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-sm">
+                        <Sparkles size={20} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-zinc-900">AI Assistant</div>
+                        <div className="text-xs text-blue-600 font-semibold">Conversational Form Filler</div>
+                      </div>
+                    </div>
+                    <button onClick={() => setAppState('empty')} className="text-sm font-bold text-zinc-500 hover:text-zinc-800 bg-zinc-100 px-3 py-1.5 rounded-lg">Back to Form</button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 bg-[#f8f9fa]">
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'bot' ? 'justify-start' : 'justify-end'}`}>
+                        <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${msg.role === 'bot' ? 'bg-white border border-zinc-200 text-zinc-800 rounded-tl-none shadow-sm font-medium' : 'bg-blue-600 text-white rounded-tr-none font-medium'}`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={handleChatSubmit} className="p-4 border-t border-zinc-100 bg-white">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        placeholder="Type your answer here..."
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-3 pl-4 pr-12 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none text-sm font-medium"
+                        autoFocus
+                      />
+                      <button type="submit" disabled={!chatInput.trim()} className="absolute right-2 top-2 p-1.5 bg-blue-600 text-white rounded-lg disabled:opacity-50">
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
               {appState === 'empty' && (
                 <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-sm border border-zinc-200 overflow-hidden">
                   <div className="px-8 pt-8 pb-6 border-b border-zinc-100 bg-zinc-50/50">
@@ -762,9 +896,14 @@ function App() {
                             <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[9px]">Required</span>
                             Full Address
                           </label>
-                          <button onClick={handleGetCurrentLocation} className="text-[10px] text-blue-600 font-bold hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded transition-colors active:scale-95 shadow-sm border border-blue-100">
-                            {isLocating ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />} Auto-Locate
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={() => setShowMap(true)} className="text-[10px] text-emerald-600 font-bold hover:text-emerald-800 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded transition-all active:scale-95 shadow-sm border border-emerald-200 hover:bg-emerald-100">
+                              <Globe size={12} /> Open Map
+                            </button>
+                            <button onClick={handleGetCurrentLocation} className="text-[10px] text-blue-600 font-bold hover:text-blue-800 flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded transition-all active:scale-95 shadow-sm border border-blue-200 hover:bg-blue-100">
+                              {isLocating ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />} Auto-Locate
+                            </button>
+                          </div>
                         </div>
                         <div className="relative">
                           <input 
@@ -812,13 +951,27 @@ function App() {
                       </div>
                     </div>
 
+                                      <div className="flex flex-col sm:flex-row items-center gap-4">
                     <button 
                       onClick={() => generateRTI()}
-                      disabled={!applicantName || pincode.length !== 6 || complaint.length < 20 || appState === 'loading' || appState === 'interview'}
-                      className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-black disabled:bg-zinc-100 disabled:text-zinc-400 disabled:border-zinc-200 border border-transparent text-white font-semibold text-base py-4 rounded-xl transition-all shadow-md active:scale-[0.98]"
+                      disabled={!applicantName || !address || complaint.length < 20 || appState === 'loading' || appState === 'interview'}
+                      className="flex-1 w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-black disabled:bg-zinc-100 disabled:text-zinc-400 disabled:border-zinc-200 border border-transparent text-white font-semibold py-4 rounded-xl shadow-sm transition-all active:scale-[0.98]"
                     >
-                      <Sparkles size={18} /> Generate Legal Draft
+                      {appState === 'loading' ? (
+                        <><Loader2 className="animate-spin" size={18} /> Analyzing Issue...</>
+                      ) : (
+                        <>Draft Application <ArrowRight size={18} /></>
+                      )}
                     </button>
+                    <div className="text-zinc-400 font-bold text-sm">OR</div>
+                    <button 
+                      onClick={() => setAppState('chat')}
+                      className="flex-1 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-lg py-4 px-6 rounded-xl border border-blue-200 shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      <MessageSquare size={20} />
+                      Conversational Fill
+                    </button>
+                  </div>
                   </div>
                 </div>
               )}
@@ -852,12 +1005,23 @@ function App() {
                       </div>
                     ))}
                   </div>
-                  <button 
-                    onClick={submitInterview}
-                    className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-lg py-4 rounded-xl transition-all shadow-md active:scale-[0.98] flex justify-center items-center gap-2"
-                  >
-                    Draft Application <ArrowRight size={20} />
-                  </button>
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <button 
+                      onClick={submitInterview}
+                      disabled={!complaint || !applicantName || !address}
+                      className="flex-1 w-full bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white font-bold text-lg py-4 rounded-xl transition-all shadow-md active:scale-[0.98] flex justify-center items-center gap-2"
+                    >
+                      Draft Application <ArrowRight size={20} />
+                    </button>
+                    <div className="text-zinc-400 font-bold text-sm">OR</div>
+                    <button 
+                      onClick={() => setAppState('chat')}
+                      className="flex-1 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-lg py-4 px-6 rounded-xl border border-blue-200 shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      <MessageSquare size={20} />
+                      Conversational Fill
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1159,6 +1323,17 @@ function App() {
 
 
       </div>
+
+      {/* Map Modal */}
+      {showMap && (
+        <LocationMapModal 
+          onClose={() => setShowMap(false)} 
+          onLocationSelect={(addr) => {
+            setAddress(addr);
+            setShowMap(false);
+          }} 
+        />
+      )}
     </div>
   );
 }

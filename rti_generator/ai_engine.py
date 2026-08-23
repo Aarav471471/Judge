@@ -96,14 +96,10 @@ def navigate_rights_with_llm(situation: str, language: str = "English") -> dict:
     
     try:
         
-        contents = [prompt]
-        model_to_use = 'gemini-3.5-flash'
-        if file_bytes and mime_type:
-            doc_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-            contents = [doc_part, prompt]
-            # Switch to gemini-2.5-flash if that's preferred for multimodal, but we'll try whatever works
-            model_to_use = 'gemini-2.5-flash'
-        response = client.models.generate_content(model=model_to_use, contents=contents)
+        response = client.models.generate_content(
+            model='gemini-3.5-flash',
+            contents=prompt
+        )
         raw_response = response.text.strip()
         if raw_response.startswith("```json"): raw_response = raw_response[7:-3]
         elif raw_response.startswith("```"): raw_response = raw_response[3:-3]
@@ -145,14 +141,10 @@ def check_schemes_with_llm(profile: dict, language: str = "English") -> dict:
     
     try:
         
-        contents = [prompt]
-        model_to_use = 'gemini-3.5-flash'
-        if file_bytes and mime_type:
-            doc_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-            contents = [doc_part, prompt]
-            # Switch to gemini-2.5-flash if that's preferred for multimodal, but we'll try whatever works
-            model_to_use = 'gemini-2.5-flash'
-        response = client.models.generate_content(model=model_to_use, contents=contents)
+        response = client.models.generate_content(
+            model='gemini-3.5-flash',
+            contents=prompt
+        )
         raw_response = response.text.strip()
         if raw_response.startswith("```json"): raw_response = raw_response[7:-3]
         elif raw_response.startswith("```"): raw_response = raw_response[3:-3]
@@ -225,14 +217,10 @@ def draft_appeal_with_llm(rti_body: str, applicant_name: str, language: str = "E
     '''
     try:
         
-        contents = [prompt]
-        model_to_use = 'gemini-3.5-flash'
-        if file_bytes and mime_type:
-            doc_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-            contents = [doc_part, prompt]
-            # Switch to gemini-2.5-flash if that's preferred for multimodal, but we'll try whatever works
-            model_to_use = 'gemini-2.5-flash'
-        response = client.models.generate_content(model=model_to_use, contents=contents)
+        response = client.models.generate_content(
+            model='gemini-3.5-flash',
+            contents=prompt
+        )
         raw_response = response.text.strip()
         if raw_response.startswith("```json"): raw_response = raw_response[7:-3]
         elif raw_response.startswith("```"): raw_response = raw_response[3:-3]
