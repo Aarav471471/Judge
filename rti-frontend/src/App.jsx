@@ -4,11 +4,11 @@ import {
   ChevronLeft, Copy, Download, RefreshCcw,
   MessageSquare, PlusCircle, AlertCircle, CheckCircle, Users, 
   Scale, BarChart3, ArrowRight, Zap, Shield, HelpCircle, ChevronDown, ChevronUp,
-  Gavel, Database 
+  Gavel, Smartphone, KeyRound, Sparkles, Mic, MicOff, Globe
 } from 'lucide-react';
 
 function App() {
-  const [currentView, setCurrentView] = useState('landing'); // 'landing', 'app', or 'database'
+  const [currentView, setCurrentView] = useState('landing'); 
   const [openFAQ, setOpenFAQ] = useState(null); 
   
   // Auth state
@@ -140,11 +140,8 @@ function App() {
   const [showAttachment, setShowAttachment] = useState(false);
   const [file, setFile] = useState(null);
   const [docData, setDocData] = useState({ department: '', subject: '', body: '' });
-  
-  // Database cases state for the new database page
-  const [casesList, setCasesList] = useState([]);
-  const [dbLoading, setDbLoading] = useState(false);
-
+  const [missingInfo, setMissingInfo] = useState([]);
+  const [interviewAnswers, setInterviewAnswers] = useState({});
   const fileInputRef = useRef(null);
 
   // --- Rights Navigator State ---
@@ -290,24 +287,17 @@ function App() {
       if (!res.ok) throw new Error("Backend connection failed");
       const data = await res.json();
       
-      const newDepartment = data.department_identified || "Public Information Officer";
-      const newSubject = "Information Request under RTI Act, 2005";
-      const newBody = data.rti_draft_preview || "";
-
-      setDocData({
-        department: newDepartment,
-        subject: newSubject,
-        body: newBody
-      });
-      setAppState('result');
-
-      // Automatically push/save to your friend's database backend endpoint if available
-      fetch('http://127.0.0.1:8000/cases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ department: newDepartment, subject: newSubject, body: newBody })
-      }).catch(err => console.log("DB Auto-save notice:", err));
-
+      if (data.missing_info && data.missing_info.length > 0) {
+        setMissingInfo(data.missing_info);
+        setAppState('interview');
+      } else {
+        setDocData({
+          department: data.department_identified || "Public Information Officer",
+          subject: "Information Request under RTI Act, 2005",
+          body: data.rti_draft_preview || ""
+        });
+        setAppState('result');
+      }
     } catch (error) {
       console.error(error);
       alert("Failed to connect to the AI engine.");
@@ -315,27 +305,11 @@ function App() {
     }
   };
 
-  // Fetch all complaints from your friend's database when entering the database view
-  const fetchAllCases = async () => {
-    setDbLoading(true);
-    try {
-      const res = await fetch('http://127.0.0.1:8000/cases'); // Adjust to match your friend's FastAPI route
-      if (!res.ok) throw new Error("Failed to fetch cases");
-      const data = await res.json();
-      setCasesList(data);
-    } catch (error) {
-      console.error("Error fetching database cases:", error);
-      setCasesList([]);
-    } finally {
-      setDbLoading(false);
-    }
+  const submitInterview = () => {
+    const combined = complaint + "\n\nFollow-up Details:\n" + missingInfo.map((q, i) => `Q: ${q}\nA: ${interviewAnswers[i] || 'Unknown'}`).join('\n');
+    setComplaint(combined);
+    generateRTI(combined);
   };
-
-  useEffect(() => {
-    if (currentView === 'database') {
-      fetchAllCases();
-    }
-  }, [currentView]);
 
   const handleDownload = async () => {
     try {
@@ -424,7 +398,99 @@ function App() {
     setSummaryFile(null);
   };
 
-  // --- VIEW 1: LANDING PAGE (Fully Restored) ---
+  // --- VIEW 0: LOGIN PAGE ---
+  if (currentView === 'login') {
+    return (
+      <div className="min-h-screen w-full bg-[#f8f9fa] flex flex-col justify-center items-center p-6 relative overflow-hidden selection:bg-[#e0e0ff] selection:text-[#3b36e8]">
+        {/* Minimal aesthetic background elements */}
+        <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-slate-100/50 blur-3xl pointer-events-none"></div>
+        
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200 p-10 relative z-10">
+          <div className="text-center mb-10">
+            <div className="mx-auto w-16 h-16 bg-[#1e1b4b] text-white rounded-2xl flex items-center justify-center mb-6 shadow-md shadow-indigo-900/20">
+              <Scale size={32} />
+            </div>
+            <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome Back</h2>
+            <p className="text-slate-500 text-sm mt-3 font-medium">Secure, passwordless entry to your civic dashboard.</p>
+          </div>
+
+          {authError && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl flex items-center gap-3 font-medium">
+              <AlertCircle size={18} className="shrink-0" /> {authError}
+            </div>
+          )}
+
+          {loginStep === 'mobile' ? (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Mobile Number</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span className="text-slate-400 font-semibold">+91</span>
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={11} // 10 digits + 1 space
+                    value={mobileInput.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1 $2')}
+                    onChange={(e) => setMobileInput(e.target.value.replace(/\D/g, ''))}
+                    className="w-full pl-14 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3b36e8]/20 focus:border-[#3b36e8] focus:bg-white focus:outline-none transition-all font-semibold text-slate-900 text-lg"
+                    placeholder="Enter 10-digit number"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleSendOTP}
+                disabled={mobileInput.replace(/\D/g, '').length !== 10}
+                className="w-full bg-[#1e1b4b] hover:bg-[#2e2b5e] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-95 flex justify-center items-center gap-2 group"
+              >
+                Send Secure OTP <ArrowRight size={18} className={mobileInput.replace(/\D/g, '').length === 10 ? 'group-hover:translate-x-1 transition-transform' : ''} />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Verification Code</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    {isIntercepting ? <Loader2 size={20} className="text-[#3b36e8] animate-spin" /> : <KeyRound size={20} className="text-slate-400" />}
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3b36e8]/20 focus:border-[#3b36e8] focus:bg-white focus:outline-none transition-all text-center tracking-[0.5em] font-mono text-2xl text-slate-900 font-bold"
+                    placeholder="------"
+                  />
+                </div>
+                {isIntercepting ? (
+                  <p className="text-xs text-[#3b36e8] text-center mt-4 font-bold flex items-center justify-center gap-1.5 animate-pulse">
+                    <Sparkles size={14} /> Intercepting secure SMS...
+                  </p>
+                ) : (
+                  <p className="text-xs text-emerald-600 text-center mt-4 font-bold flex items-center justify-center gap-1.5">
+                    <CheckCircle size={14} /> Code automatically retrieved
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={handleVerifyOTP}
+                disabled={otpInput.length !== 6 || isIntercepting}
+                className="w-full bg-[#3b36e8] hover:bg-[#2e2bcf] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-95"
+              >
+                Verify & Access Dashboard
+              </button>
+            </div>
+          )}
+        </div>
+        <button onClick={() => setCurrentView('landing')} className="mt-8 text-slate-500 hover:text-[#1e1b4b] font-bold text-sm flex items-center gap-1.5 transition-colors">
+          <ChevronLeft size={16} /> Return to Homepage
+        </button>
+      </div>
+    );
+  }
+
+  // --- VIEW 1: LANDING PAGE ---
   if (currentView === 'landing') {
     return (
       <div className="min-h-screen bg-[#f8f9fa] text-slate-900 font-sans flex flex-col selection:bg-[#e0e0ff] selection:text-[#3b36e8]">
@@ -434,26 +500,35 @@ function App() {
             <div className="w-10 h-10 bg-[#1e1b4b] text-white rounded-lg flex items-center justify-center shadow-sm"><Scale size={20} /></div>
             <div className="flex flex-col justify-center leading-tight"><span>Civic<span className="text-[#3b36e8] font-normal">Action</span></span></div>
           </div>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setCurrentView('database')}
-              className="text-slate-600 hover:text-blue-600 font-medium text-sm flex items-center gap-1.5 transition-colors"
-            >
-              <Database size={16} /> All Complaints (DB)
-            </button>
-            <button 
-              onClick={() => setCurrentView('app')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg transition-colors shadow-sm text-sm"
-            >
-              Launch App
-            </button>
-          </div>
+          <button onClick={() => setCurrentView(isAuthenticated ? 'app' : 'login')} className="bg-transparent hover:bg-slate-100 text-slate-800 font-semibold py-2 px-6 rounded-lg border border-slate-300 transition-all shadow-sm">
+            {isAuthenticated ? 'Go to Dashboard' : 'Sign In'}
+          </button>
         </nav>
-
-        <main className="flex-1 flex flex-col items-center justify-start px-6 max-w-5xl mx-auto py-16 pb-24 w-full">
-          <div className="text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 font-medium text-sm mb-6 border border-blue-100">
-              <Scale size={16} /> Democratizing Legal Action
+        
+        <main className="flex-1 w-full flex flex-col pt-16 md:pt-20">
+          {/* Hero Section */}
+          <div className="max-w-7xl mx-auto w-full px-6 lg:px-8 py-10 lg:py-16 flex flex-col lg:flex-row items-center justify-between min-h-[75vh]">
+            
+            {/* Left Side: Content */}
+            <div className="w-full lg:w-1/2 flex flex-col items-start text-left relative z-10 lg:pr-8 xl:pr-12">
+              <div className="border border-slate-900 text-[#1e1b4b] text-[10px] sm:text-xs font-bold tracking-[0.15em] uppercase px-3 py-1.5 sm:px-4 sm:py-2 mb-6 sm:mb-8 shadow-[2px_2px_0px_0px_rgba(30,27,75,0.1)] bg-white">
+                Application Drafting, Automated
+              </div>
+              
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.1] mb-5">
+                Claim your <br className="hidden sm:block"/> rights in <span className="text-[#3b36e8]">plain <br className="hidden sm:block"/> language.</span>
+              </h1>
+              
+              <p className="text-lg sm:text-xl text-slate-600 mb-8 max-w-md leading-relaxed">
+                No legal jargon. No expensive lawyers. Describe your civic issue like you're talking to a friend — our AI drafts a legally sound RTI application.
+              </p>
+              
+              <button onClick={() => setCurrentView(isAuthenticated ? 'app' : 'login')} className="bg-[#1e1b4b] hover:bg-[#2e2b5e] text-white font-semibold text-base sm:text-lg py-3 sm:py-4 px-6 sm:px-8 rounded-xl transition-all flex items-center gap-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-95">
+                Start Drafting Now <ArrowRight size={18} />
+              </button>
+              <div className="mt-4 text-xs sm:text-sm text-slate-500 font-medium">
+                Free to use · Takes about 2 minutes
+              </div>
             </div>
             
             {/* Right Side: Graphic */}
@@ -564,198 +639,30 @@ function App() {
     );
   }
 
-  // --- VIEW 3: ALL COMPLAINTS DATABASE PAGE ---
-  if (currentView === 'database') {
-    return (
-      <div className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans flex flex-col">
-        <nav className="flex items-center justify-between px-8 py-5 bg-white border-b border-slate-200 shrink-0">
-          <div 
-            onClick={() => setCurrentView('landing')}
-            className="flex items-center gap-3 font-bold text-lg tracking-wide cursor-pointer text-slate-900"
-          >
-            <img src="/image.jpg.jpg" alt="Official Emblem" className="h-10 w-auto mix-blend-multiply" />
-            <span>RTI Auto-Drafter</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setCurrentView('app')}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg shadow-sm"
-            >
-              AI Assistant
-            </button>
-            <button 
-              onClick={() => { resetApp(); setCurrentView('app'); }}
-              className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md text-sm font-medium"
-            >
-              <PlusCircle size={16} /> New Case
-            </button>
-          </div>
-        </nav>
-
-        <main className="flex-1 max-w-4xl w-full mx-auto p-8">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">All Submitted Complaints</h2>
-              <p className="text-sm text-slate-500">Live records pulled from your teammate's database backend.</p>
-            </div>
-            <button 
-              onClick={fetchAllCases}
-              className="bg-white border border-slate-300 text-slate-700 text-sm font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
-            >
-              Refresh Data
-            </button>
-          </div>
-
-          {dbLoading ? (
-            <div className="flex items-center justify-center py-20 text-slate-500 gap-2">
-              <Loader2 className="animate-spin" size={20} /> Loading database records...
-            </div>
-          ) : casesList.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
-              <Database className="mx-auto text-slate-300 mb-3" size={40} />
-              <p className="text-slate-700 font-medium mb-1">No complaints found in the database.</p>
-              <p className="text-slate-400 text-xs mb-4">Try generating a new application in the AI Assistant to populate records.</p>
-              <button 
-                onClick={() => setCurrentView('app')}
-                className="bg-blue-600 text-white text-sm font-semibold py-2 px-5 rounded-lg shadow-sm"
-              >
-                Create First Case
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {casesList.map((item, index) => (
-                <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100">
-                      {item.department || "Public Information Officer"}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">ID: #{item.id || index + 1}</span>
-                  </div>
-                  <h3 className="font-bold text-slate-900 mb-1">{item.subject || "Information Request under RTI Act, 2005"}</h3>
-                  <p className="text-slate-600 text-sm whitespace-pre-line line-clamp-3">{item.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
-      </div>
-    );
-  }
-
-  // --- VIEW 3: ALL COMPLAINTS DATABASE PAGE ---
-  if (currentView === 'database') {
-    return (
-      <div className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans flex flex-col">
-        <nav className="flex items-center justify-between px-8 py-5 bg-white border-b border-slate-200 shrink-0">
-          <div 
-            onClick={() => setCurrentView('landing')}
-            className="flex items-center gap-3 font-bold text-lg tracking-wide cursor-pointer text-slate-900"
-          >
-            <img src="/image.jpg.jpg" alt="Official Emblem" className="h-10 w-auto mix-blend-multiply" />
-            <span>RTI Auto-Drafter</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setCurrentView('app')}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg shadow-sm"
-            >
-              AI Assistant
-            </button>
-            <button 
-              onClick={() => { resetApp(); setCurrentView('app'); }}
-              className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md text-sm font-medium"
-            >
-              <PlusCircle size={16} /> New Case
-            </button>
-          </div>
-        </nav>
-
-        <main className="flex-1 max-w-4xl w-full mx-auto p-8">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">All Submitted Complaints</h2>
-              <p className="text-sm text-slate-500">Live records pulled from your teammate's database backend.</p>
-            </div>
-            <button 
-              onClick={fetchAllCases}
-              className="bg-white border border-slate-300 text-slate-700 text-sm font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
-            >
-              Refresh Data
-            </button>
-          </div>
-
-          {dbLoading ? (
-            <div className="flex items-center justify-center py-20 text-slate-500 gap-2">
-              <Loader2 className="animate-spin" size={20} /> Loading database records...
-            </div>
-          ) : casesList.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
-              <Database className="mx-auto text-slate-300 mb-3" size={40} />
-              <p className="text-slate-700 font-medium mb-1">No complaints found in the database.</p>
-              <p className="text-slate-400 text-xs mb-4">Try generating a new application in the AI Assistant to populate records.</p>
-              <button 
-                onClick={() => setCurrentView('app')}
-                className="bg-blue-600 text-white text-sm font-semibold py-2 px-5 rounded-lg shadow-sm"
-              >
-                Create First Case
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {casesList.map((item, index) => (
-                <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100">
-                      {item.department || "Public Information Officer"}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">ID: #{item.id || index + 1}</span>
-                  </div>
-                  <h3 className="font-bold text-slate-900 mb-1">{item.subject || "Information Request under RTI Act, 2005"}</h3>
-                  <p className="text-slate-600 text-sm whitespace-pre-line line-clamp-3">{item.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
-      </div>
-    );
-  }
-
   // --- VIEW 2: APPLICATION INTERFACE ---
   return (
-    <div className="h-screen w-full bg-slate-50 text-slate-900 font-sans flex flex-col overflow-hidden fixed inset-0">
-      
-      <nav className="flex flex-wrap items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shrink-0 gap-4 w-full">
-        <div className="flex items-center gap-6">
-          <div 
-            onClick={() => setCurrentView('landing')}
-            className="flex items-center gap-3 font-bold text-lg tracking-wide cursor-pointer hover:opacity-75 transition-opacity text-slate-900"
-          >
-            <img src="/image.jpg.jpg" alt="Official Emblem" className="h-10 w-auto mix-blend-multiply" />
-            <span>RTI Auto-Drafter</span>
+    <div className="h-screen w-full bg-[#FAFAFA] text-zinc-900 font-sans flex flex-col overflow-hidden fixed inset-0 text-left selection:bg-blue-100 selection:text-blue-900">
+      <style>{`
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes subtleFade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-subtle { animation: subtleFade 0.4s ease-out forwards; }
+      `}</style>
+
+      {/* Top Navbar */}
+      <nav className="h-16 flex items-center justify-between px-6 bg-white/80 backdrop-blur-md border-b border-zinc-200/80 shrink-0 z-20">
+        <div className="flex items-center gap-8">
+          <div onClick={() => setCurrentView('landing')} className="flex items-center gap-2.5 font-bold text-lg tracking-tight cursor-pointer group">
+            <div className="w-8 h-8 bg-zinc-900 text-white rounded-lg flex items-center justify-center shadow-md group-hover:bg-blue-600 transition-colors"><Scale size={16} /></div>
+            <span className="text-zinc-900 group-hover:text-blue-600 transition-colors">CivicAction</span>
           </div>
           
-          <div className="hidden md:flex items-center gap-5 text-sm font-medium text-slate-500 border-l border-slate-200 pl-6">
-            <button 
-              onClick={() => setCurrentView('database')}
-              className="flex items-center gap-1.5 hover:text-slate-900 transition-colors"
-            >
-              <Database size={16} /> All Complaints (DB)
-            </button>
-            <button 
-              onClick={() => setCurrentView('app')}
-              className="flex items-center gap-1.5 hover:text-slate-900 transition-colors"
-            >
-              <MessageSquare size={16} /> AI Assistant
-            </button>
-            {/* Functional New Case Button */}
-            <button 
-              onClick={resetApp}
-              className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md hover:bg-blue-100 transition-colors"
-            >
-              <PlusCircle size={16} /> New Case
-            </button>
+          <div className="hidden md:flex items-center gap-2 bg-zinc-100/80 p-1 rounded-lg border border-zinc-200/50">
+            <button onClick={() => setActiveTab('rti')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activeTab === 'rti' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}>RTI Drafter</button>
+            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activeTab === 'dashboard' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}>Dashboard</button>
+            <button onClick={() => setActiveTab('rights')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activeTab === 'rights' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}>Rights Navigator</button>
+            <button onClick={() => setActiveTab('schemes')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activeTab === 'schemes' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}>Schemes</button>
+            <button onClick={() => setActiveTab('summarizer')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activeTab === 'summarizer' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}>Doc Summarizer</button>
           </div>
         </div>
 
@@ -1248,128 +1155,6 @@ function App() {
             </div>
           )}
           
-          <Scale className="absolute -top-16 -right-16 w-96 h-96 text-slate-900 opacity-5 pointer-events-none" strokeWidth={1} />
-
-          {appState === 'empty' && (
-            <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden relative z-10">
-              <div className="p-8 text-center bg-white border-b border-slate-100">
-                <div className="mx-auto w-16 h-16 bg-blue-50 text-slate-900 rounded-full flex items-center justify-center mb-6 border border-blue-100">
-                  <Scale size={32} strokeWidth={1.5} />
-                </div>
-                <h2 className="text-xl font-bold mb-3 text-slate-900">Ready to Draft</h2>
-                <p className="text-slate-500 text-sm leading-relaxed font-medium max-w-sm mx-auto">
-                  Describe your issue on the left. We'll generate a formally structured RTI application addressed to the correct government department.
-                </p>
-              </div>
-              
-              <div className="p-8 bg-slate-50/50 opacity-60 select-none pointer-events-none">
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 bg-white">
-                  <div className="flex items-center gap-2 mb-6 text-slate-400">
-                    <Gavel size={16} className="text-slate-900" strokeWidth={2} />
-                    <span className="text-xs font-bold uppercase tracking-wider">Draft Preview</span>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <div className="h-2 w-8 bg-slate-300 rounded mb-2"></div>
-                      <div className="h-3 w-48 bg-slate-200 rounded mb-1"></div>
-                      <div className="h-3 w-32 bg-slate-200 rounded"></div>
-                    </div>
-                    <div>
-                      <div className="h-2 w-12 bg-slate-300 rounded mb-2"></div>
-                      <div className="h-3 w-full max-w-md bg-slate-200 rounded"></div>
-                    </div>
-                    <div className="pt-2 space-y-3">
-                      <div className="h-2 w-full bg-slate-200 rounded"></div>
-                      <div className="h-2 w-full bg-slate-200 rounded"></div>
-                      <div className="h-2 w-5/6 bg-slate-200 rounded"></div>
-                      <div className="h-2 w-4/5 bg-slate-200 rounded"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {appState === 'loading' && (
-            <div className="max-w-2xl w-full relative z-10">
-              <div className="flex items-center gap-3 mb-8 text-blue-600">
-                <Loader2 className="animate-spin" size={20} />
-                <span className="font-bold">{loadingMessage}</span>
-              </div>
-              <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm animate-pulse">
-                <div className="h-4 bg-slate-200 rounded w-1/3 mb-8"></div>
-                <div className="h-6 bg-slate-200 rounded w-3/4 mb-4"></div>
-                <div className="space-y-3">
-                  <div className="h-3 bg-slate-100 rounded w-full"></div>
-                  <div className="h-3 bg-slate-100 rounded w-5/6"></div>
-                  <div className="h-3 bg-slate-100 rounded w-full"></div>
-                  <div className="h-3 bg-slate-100 rounded w-4/5"></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {appState === 'result' && (
-            <div className="max-w-3xl w-full flex flex-col h-full animate-in fade-in duration-500 relative z-10">
-              <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-                <Gavel className="text-slate-900" size={24} /> Review & Edit
-              </h2>
-              
-              <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm flex-1 mb-6">
-                
-                <div className="mb-5">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">To Department</label>
-                  <input 
-                    type="text"
-                    value={docData.department}
-                    onChange={(e) => setDocData({...docData, department: e.target.value})}
-                    className="w-full bg-slate-50 text-slate-900 p-3 rounded border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none font-medium transition-shadow"
-                  />
-                </div>
-
-                <div className="mb-5">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject</label>
-                  <input 
-                    type="text"
-                    value={docData.subject}
-                    onChange={(e) => setDocData({...docData, subject: e.target.value})}
-                    className="w-full bg-slate-50 text-slate-900 p-3 rounded border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none font-medium transition-shadow"
-                  />
-                </div>
-
-                <div className="mb-2 h-[250px]">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Application Body</label>
-                  <textarea 
-                    value={docData.body}
-                    onChange={(e) => setDocData({...docData, body: e.target.value})}
-                    className="w-full h-full bg-slate-50 text-slate-700 p-4 rounded border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none leading-relaxed transition-shadow"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-4 shrink-0">
-                <button 
-                  onClick={handleDownload}
-                  className="flex-1 min-w-[200px] flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-md"
-                >
-                  <Download size={18} /> Download as PDF
-                </button>
-                <button 
-                  onClick={() => navigator.clipboard.writeText(docData.body)}
-                  className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-3 px-6 rounded-lg transition-colors shadow-sm"
-                >
-                  <Copy size={18} /> Copy Text
-                </button>
-                <button 
-                  onClick={resetApp}
-                  className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-3 px-6 rounded-lg transition-colors shadow-sm ml-auto"
-                >
-                  <RefreshCcw size={18} /> Start Over
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
 
