@@ -11,7 +11,7 @@ def create_rti_pdf(draft_text: str, applicant_id: str, department: str) -> str:
     pdf.set_font("Helvetica", style="B", size=16)
     
     # Title
-    pdf.cell(0, 10, "Right to Information (RTI) Application", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Right to Information (RTI) Application", align="C", ln=1)
     pdf.ln(5)
     
     # Sanitize department string just in case
@@ -20,8 +20,8 @@ def create_rti_pdf(draft_text: str, applicant_id: str, department: str) -> str:
     # Metadata Header
     pdf.set_font("Helvetica", size=10)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 6, f"Applicant ID: {applicant_id}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, f"To: {safe_dept}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Applicant ID: {applicant_id}", ln=1)
+    pdf.cell(0, 6, f"To: {safe_dept}", ln=1)
     pdf.ln(10)
     
     # Main Body Text
